@@ -19,7 +19,7 @@ const client = new Client({
 
 // Configurações
 const config = {
-    messageLimit: 5,
+    messageLimit: 1,
     messageLifetime: 300000, // 5 minutos
     updateInterval: 10000 // 10 segundos
 };
