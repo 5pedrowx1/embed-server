@@ -1,0 +1,4 @@
+# Arquivos sensíveis
+.env
+*.key
+*.crt
