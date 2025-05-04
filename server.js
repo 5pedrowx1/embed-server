@@ -1,9 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
-const cors = require('cors');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { Mutex } = require('async-mutex');
 
@@ -19,19 +15,12 @@ const client = new Client({
     ]
 });
 
-// Configuração SSL
-const privateKey = fs.readFileSync('localhost+2-key.pem', 'utf8');
-const certificate = fs.readFileSync('localhost+2.pem', 'utf8');
-const credentials = { key: privateKey, cert: certificate };
-
-// Configurações
 const config = {
     messageLimit: 5,
     messageLifetime: 300000, // 5 minutos
     updateInterval: 10000 // 10 segundos
 };
 
-// Estado do servidor
 let serverState = {
     members: 0,
     bots: 0,
@@ -42,25 +31,19 @@ let serverState = {
 };
 
 // Middlewares
-app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
+app.use(express.static('public'));
 
-// Controle de mensagens
-async function updateMessages() {
-    const now = Date.now();
-    serverState.recentMessages = serverState.recentMessages
-        .filter(msg => now - msg.timestamp < config.messageLifetime)
-        .slice(-config.messageLimit);
-}
-
+// Atualização de estado
 async function updateServerStats() {
+    const release = await mutex.acquire();
     try {
         const guild = client.guilds.cache.get(process.env.GUILD_ID);
         if (!guild) return;
 
         await guild.members.fetch();
 
-        const newState = {
+        serverState = {
             members: guild.memberCount,
             bots: guild.members.cache.filter(m => m.user.bot).size,
             channels: guild.channels.cache.size,
@@ -70,27 +53,20 @@ async function updateServerStats() {
                     name: m.displayName || 'Usuário Desconhecido',
                     activity: m.presence?.activities[0]?.name || 'Sem atividade'
                 })),
-            botStatus: client.user.presence.status,
-            recentMessages: serverState.recentMessages
+            recentMessages: serverState.recentMessages,
+            botStatus: client.user.presence.status
         };
-
-        await mutex.runExclusive(() => {
-            serverState = newState;
-        });
     } catch (error) {
         console.error('Erro na atualização:', error);
+    } finally {
+        release();
     }
 }
 
 // Eventos do Discord
 client.on('ready', () => {
     console.log(`✅ Bot conectado como: ${client.user.tag}`);
-    setInterval(async () => {
-        await mutex.runExclusive(async () => {
-            await updateServerStats();
-            await updateMessages();
-        });
-    }, config.updateInterval);
+    setInterval(updateServerStats, config.updateInterval);
 });
 
 client.on('messageCreate', async (message) => {
@@ -124,8 +100,9 @@ app.get('/stats', async (req, res) => {
 });
 
 // Iniciar servidor
-https.createServer(credentials, app).listen(8888, () => {
-    console.log('🌐 Servidor HTTPS rodando em: https://localhost:8888');
+const PORT = process.env.PORT || 8888;
+app.listen(PORT, () => {
+    console.log(`🌐 Servidor rodando na porta ${PORT}`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
