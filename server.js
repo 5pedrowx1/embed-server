@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
+const cors = require('cors');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { Mutex } = require('async-mutex');
 
@@ -15,6 +17,7 @@ const client = new Client({
     ]
 });
 
+// Configurações
 const config = {
     messageLimit: 5,
     messageLifetime: 300000, // 5 minutos
@@ -31,8 +34,9 @@ let serverState = {
 };
 
 // Middlewares
+app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Atualização de estado
 async function updateServerStats() {
@@ -94,9 +98,8 @@ function getMessageEmoji(content) {
 }
 
 // Rotas
-app.get('/stats', async (req, res) => {
-    const state = await mutex.runExclusive(() => ({ ...serverState }));
-    res.json(state);
+app.get('/stats', (req, res) => {
+    res.json(serverState);
 });
 
 // Iniciar servidor
